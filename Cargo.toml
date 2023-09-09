@@ -1,0 +1,3 @@
+[workspace]
+
+members = ["bril-rs", "bbb", "dce", "lvn"]
