@@ -1,2 +1,7 @@
-**/target
+# workspace
 .vscode
+.venv
+
+# rust
+**/target
+Cargo.lock
