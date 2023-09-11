@@ -1,5 +1,5 @@
 [package]
-name = "dce"
+name = "lvn"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,4 +11,4 @@ util = { path = "../util" }
 
 [dependencies.bril-rs]
 path = "../bril-rs"
-features = ["memory", "float", "ssa", "speculate"]
+features = ["memory", "ssa", "speculate"]

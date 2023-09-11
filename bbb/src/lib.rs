@@ -6,6 +6,32 @@ pub struct Block {
     pub instrs: Vec<Instruction>,
 }
 
+pub trait ToCode {
+    fn to_code(&self) -> Vec<Code>;
+}
+
+impl ToCode for Block {
+    fn to_code(&self) -> Vec<Code> {
+        let mut result = Vec::new();
+        if let Some(label) = &self.label {
+            result.push(Code::Label {
+                label: label.clone(),
+                pos: None,
+            })
+        }
+        for instr in &self.instrs {
+            result.push(Code::Instruction(instr.clone()));
+        }
+        result
+    }
+}
+
+impl ToCode for Vec<Block> {
+    fn to_code(&self) -> Vec<Code> {
+        self.iter().flat_map(|b| b.to_code()).collect()
+    }
+}
+
 fn is_terminator(instr: &Instruction) -> bool {
     matches!(
         instr,
@@ -91,20 +117,4 @@ pub fn instr_to_txt(instr: &Instruction) -> String {
             ..
         } => format!("{}", format_rhs(op.to_string(), funcs, args, labels)),
     }
-}
-
-pub fn blocks_to_code(blocks: &Vec<Block>) -> Vec<Code> {
-    let mut result = Vec::new();
-    for block in blocks {
-        if let Some(label) = &block.label {
-            result.push(Code::Label {
-                label: label.clone(),
-                pos: None,
-            })
-        }
-        for instr in &block.instrs {
-            result.push(Code::Instruction(instr.clone()));
-        }
-    }
-    result
 }

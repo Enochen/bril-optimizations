@@ -1,5 +1,5 @@
 [envs.baseline]
-command = "bril2json < {filename} | brili -p {args}"
+command = "bril2json < {filename} | brilirs -p {args}"
 
 [envs.dce]
-command = "bril2json < {filename} | cargo run --bin dce | brili -p {args}"
+command = "bril2json < {filename} | target/debug/dce | brilirs -p {args}"
