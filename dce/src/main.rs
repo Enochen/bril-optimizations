@@ -1,12 +1,12 @@
 use bbb::{form_blocks, Block, ToCode};
 use bril_rs::{load_program_from_read, output_program, Function, Instruction};
 use std::{collections::HashSet, io};
-use util::{get_args, get_dest};
+use util::SafeAccess;
 
 fn find_used(blocks: &Vec<Block>) -> HashSet<String> {
     blocks
         .iter()
-        .flat_map(|block| block.instrs.iter().flat_map(get_args))
+        .flat_map(|block| block.instrs.iter().flat_map(|instr| instr.get_args()))
         .flatten()
         .cloned()
         .collect()
@@ -17,7 +17,7 @@ fn trivial_dce_block(block: &mut Block, used: &HashSet<String>) -> bool {
     block.instrs = block
         .instrs
         .iter()
-        .filter(|instr| get_dest(instr).map_or(true, |d| used.contains(d)))
+        .filter(|instr| instr.get_dest().map_or(true, |d| used.contains(d)))
         .cloned()
         .collect();
     block.instrs.len() < original_length
@@ -39,14 +39,14 @@ fn regular_dce_block(block: &mut Block) -> bool {
     let mut dead_vars = HashSet::new();
     let mut new_instrs = Vec::new();
     for instr in block.instrs.iter().rev() {
-        if let Some(dest) = get_dest(instr) {
+        if let Some(dest) = instr.get_dest() {
             if dead_vars.contains(dest) {
                 dirty = true;
                 continue;
             }
             dead_vars.insert(dest);
         }
-        if let Some(args) = get_args(instr) {
+        if let Some(args) = instr.get_args() {
             args.into_iter().for_each(|arg| {
                 dead_vars.remove(&arg);
             });

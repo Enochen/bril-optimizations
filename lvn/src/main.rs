@@ -2,28 +2,47 @@ mod table;
 mod value;
 
 use bbb::{form_blocks, Block, ToCode};
-use bril_rs::{load_program_from_read, output_program, Function};
+use bril_rs::{load_program_from_read, output_program, EffectOps, Function, Instruction};
 use std::io;
 use table::Table;
-use util::{get_args, set_args, get_dest};
+use util::SafeAccess;
+use value::ToValue;
+
+fn is_call(instr: &Instruction) -> bool {
+    matches!(
+        instr,
+        Instruction::Effect {
+            op: EffectOps::Call,
+            ..
+        }
+    )
+}
 
 fn apply_lvn_block(block: &mut Block) {
     let table = Table::new();
 
-    let mut new_instrs = Vec::new();
-    for (index, instr) in block.instrs.iter_mut().enumerate() {
-        if let Some(args) = get_args(instr) {
-            let canonicalized = args
-                .iter()
-                .map(|arg| table.lookup(arg).unwrap_or_else(|| arg.clone()))
-                .collect();
-            set_args(instr, canonicalized)
-        }
-        if let Some(dest) = get_dest(instr) {
-
-        }
-    }
-    block.instrs = new_instrs;
+    block.instrs = block
+        .instrs
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(index, mut instr)| {
+            if let Some(args) = instr.get_args() {
+                let canonicalized = args
+                    .iter()
+                    .map(|arg| table.lookup(arg).unwrap_or_else(|| arg.clone()))
+                    .collect();
+                instr.set_args(canonicalized);
+            }
+            if !is_call(&instr) {
+                return instr;
+            }
+            if let (Some(dest), Some(value)) = (instr.get_dest(), instr.to_value()) {
+                // should fold value at this point
+            }
+            instr
+        })
+        .collect();
 }
 
 fn apply_lvn(func: &mut Function) {

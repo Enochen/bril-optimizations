@@ -1,4 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{hash_map::Entry, HashMap},
+    rc::Rc,
+};
 
 use bril_rs::{Literal, Type, ValueOps};
 
@@ -27,6 +31,20 @@ impl Table {
         self.cloud
             .get(variable)
             .and_then(|rc| rc.borrow().variables.first().cloned())
+    }
+
+    /// Returns true if value was newly inserted
+    pub fn register_value(&mut self, value: Value) -> bool {
+        match self.value_index.entry(value.clone()) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(entry) => {
+                entry.insert(Rc::new(RefCell::new(TableEntry {
+                    value,
+                    variables: vec![],
+                })));
+                true
+            }
+        }
     }
 
     /// Removes mapping for given variable

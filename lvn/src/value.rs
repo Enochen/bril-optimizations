@@ -1,30 +1,55 @@
-use bril_rs::{Literal, Type, ValueOps};
+use bril_rs::{Instruction, Literal, Type, ValueOps};
 use std::hash::{Hash, Hasher};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Value {
-    ValueOp {
-        val_type: Type,
+    Operation {
+        kind: Type,
         op: ValueOps,
         args: Vec<String>,
     },
     Constant {
-        val_type: Type,
+        kind: Type,
         value: Literal,
     },
+}
+
+pub trait ToValue {
+    fn to_value(&self) -> Option<Value>;
+}
+
+impl ToValue for Instruction {
+    fn to_value(&self) -> Option<Value> {
+        match self.clone() {
+            Instruction::Constant {
+                const_type, value, ..
+            } => Some(Value::Constant {
+                kind: const_type,
+                value: value,
+            }),
+            Instruction::Value {
+                args, op, op_type, ..
+            } => Some(Value::Operation {
+                kind: op_type,
+                op: op,
+                args: args,
+            }),
+            Instruction::Effect { .. } => None,
+        }
+    }
 }
 
 impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Value::ValueOp { val_type, op, args } => {
-                val_type.hash(state);
+            Value::Operation { kind, op, args } => {
+                kind.hash(state);
                 op.hash(state);
                 args.hash(state);
             }
-            Value::Constant { val_type, value } => {
+            Value::Constant { kind, value } => {
+                kind.hash(state);
                 std::mem::discriminant(value).hash(state);
-                val_type.hash(state);
                 match value {
                     Literal::Int(i) => i.hash(state),
                     Literal::Bool(b) => b.hash(state),
@@ -36,4 +61,4 @@ impl Hash for Value {
     }
 }
 
-impl Eq for Value { }
+impl Eq for Value {}
