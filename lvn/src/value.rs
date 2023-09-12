@@ -1,41 +1,34 @@
 use bril_rs::{Instruction, Literal, Type, ValueOps};
 use std::hash::{Hash, Hasher};
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Value {
     Operation {
         kind: Type,
         op: ValueOps,
-        args: Vec<String>,
+        args: Vec<usize>,
     },
     Constant {
         kind: Type,
-        value: Literal,
+        literal: Literal,
+    },
+    Unknown {
+        name: String,
     },
 }
 
-pub trait ToValue {
-    fn to_value(&self) -> Option<Value>;
-}
-
-impl ToValue for Instruction {
-    fn to_value(&self) -> Option<Value> {
-        match self.clone() {
-            Instruction::Constant {
-                const_type, value, ..
-            } => Some(Value::Constant {
-                kind: const_type,
-                value: value,
-            }),
-            Instruction::Value {
-                args, op, op_type, ..
-            } => Some(Value::Operation {
-                kind: op_type,
-                op: op,
-                args: args,
-            }),
-            Instruction::Effect { .. } => None,
+impl Value {
+    pub fn to_canonical(&self) -> Value {
+        let mut canonical = self.clone();
+        if let Value::Operation {
+            args,
+            op: ValueOps::Add | ValueOps::Mul,
+            ..
+        } = &mut canonical
+        {
+            args.sort();
         }
+        canonical
     }
 }
 
@@ -47,7 +40,10 @@ impl Hash for Value {
                 op.hash(state);
                 args.hash(state);
             }
-            Value::Constant { kind, value } => {
+            Value::Constant {
+                kind,
+                literal: value,
+            } => {
                 kind.hash(state);
                 std::mem::discriminant(value).hash(state);
                 match value {
@@ -57,6 +53,7 @@ impl Hash for Value {
                     Literal::Char(c) => c.hash(state),
                 }
             }
+            Value::Unknown { name } => name.hash(state),
         }
     }
 }

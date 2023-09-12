@@ -17,7 +17,7 @@ fn trivial_dce_block(block: &mut Block, used: &HashSet<String>) -> bool {
     block.instrs = block
         .instrs
         .iter()
-        .filter(|instr| instr.get_dest().map_or(true, |d| used.contains(d)))
+        .filter(|instr| instr.get_dest().map_or(true, |d| used.contains(&d)))
         .cloned()
         .collect();
     block.instrs.len() < original_length
@@ -40,7 +40,7 @@ fn regular_dce_block(block: &mut Block) -> bool {
     let mut new_instrs = Vec::new();
     for instr in block.instrs.iter().rev() {
         if let Some(dest) = instr.get_dest() {
-            if dead_vars.contains(dest) {
+            if dead_vars.contains(&dest) {
                 dirty = true;
                 continue;
             }
@@ -48,7 +48,7 @@ fn regular_dce_block(block: &mut Block) -> bool {
         }
         if let Some(args) = instr.get_args() {
             args.into_iter().for_each(|arg| {
-                dead_vars.remove(&arg);
+                dead_vars.remove(arg);
             });
         }
         new_instrs.push(instr.clone());
