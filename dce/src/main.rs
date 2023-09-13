@@ -1,5 +1,5 @@
 use bbb::{form_blocks, Block, ToCode};
-use bril_rs::{load_program_from_read, output_program, Function, Instruction};
+use bril_rs::{load_program_from_read, output_program, Function};
 use std::{collections::HashSet, io};
 use util::SafeAccess;
 

@@ -1,4 +1,4 @@
-use bril_rs::{Instruction, Literal, Type, ValueOps};
+use bril_rs::{Literal, Type, ValueOps};
 use std::hash::{Hash, Hasher};
 
 #[derive(PartialEq, Clone, Debug)]
@@ -8,13 +8,8 @@ pub enum Value {
         op: ValueOps,
         args: Vec<usize>,
     },
-    Constant {
-        kind: Type,
-        literal: Literal,
-    },
-    Unknown {
-        name: String,
-    },
+    Constant(Literal),
+    Unknown(String),
 }
 
 impl Value {
@@ -40,20 +35,16 @@ impl Hash for Value {
                 op.hash(state);
                 args.hash(state);
             }
-            Value::Constant {
-                kind,
-                literal: value,
-            } => {
-                kind.hash(state);
-                std::mem::discriminant(value).hash(state);
-                match value {
+            Value::Constant(literal) => {
+                std::mem::discriminant(literal).hash(state);
+                match literal {
                     Literal::Int(i) => i.hash(state),
                     Literal::Bool(b) => b.hash(state),
                     Literal::Float(f) => f.to_bits().hash(state),
                     Literal::Char(c) => c.hash(state),
                 }
             }
-            Value::Unknown { name } => name.hash(state),
+            Value::Unknown(name) => name.hash(state),
         }
     }
 }

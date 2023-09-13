@@ -44,7 +44,7 @@ fn apply_lvn_block(block: &mut Block) {
     let mut count = 0;
 
     for arg in get_outside_vars(block) {
-        let value = Value::Unknown { name: arg.clone() };
+        let value = Value::Unknown(arg.clone());
         table.register_value(&value);
         table.add_binding(&arg, &value);
     }
@@ -74,21 +74,36 @@ fn apply_lvn_block(block: &mut Block) {
                     return instr;
                 }
                 let simplified = table.simplify(&value);
-                if let Value::Constant { kind, literal } = simplified {
-                    instr = Instruction::Constant {
-                        dest: dest.to_owned(),
-                        op: ConstOps::Const,
-                        pos: instr.get_pos(),
-                        const_type: kind,
-                        value: literal,
-                    };
-                    value = table.create_value(&instr).unwrap();
+                match simplified {
+                    Value::Constant(literal) => {
+                        instr = Instruction::Constant {
+                            dest: dest.to_owned(),
+                            op: ConstOps::Const,
+                            pos: instr.get_pos(),
+                            const_type: literal.get_type(),
+                            value: literal,
+                        };
+                        value = table.create_value(&instr).unwrap();
+                    }
+                    Value::Unknown(name) if name != dest && table.check_unknown(&name) => {
+                        instr = Instruction::Value {
+                            args: vec![name.to_owned()],
+                            dest: dest.to_owned(),
+                            funcs: Vec::new(),
+                            labels: Vec::new(),
+                            op: ValueOps::Id,
+                            pos: instr.get_pos(),
+                            op_type: instr.get_type().cloned().unwrap(),
+                        };
+                        value = table.create_value(&instr).unwrap();
+                    }
+                    _ => {}
                 }
                 // should fold value at this point
                 // if not the last write
                 //    then add binding for old value
                 //    and set instr.dest to lvn_temp_{count}
-                let register = table.register_value(&value);
+                table.register_value(&value);
                 if index != *last_writes.get(&dest).unwrap() {
                     table.remove_binding(&dest);
                     table.add_binding(&dest, &value);
@@ -96,7 +111,7 @@ fn apply_lvn_block(block: &mut Block) {
                     instr.set_dest(dest.to_owned());
                     count += 1;
                 }
-                if let Some(canonical) = register {
+                if let Some(canonical) = table.get_canonical(&value) {
                     if !instr.is_const() {
                         // replace with id to lookup
                         instr = Instruction::Value {
