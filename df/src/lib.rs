@@ -1,14 +1,10 @@
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Display,
-};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use bbb::Block;
 use cfg::{CFGNode, CFG};
+use itertools::Itertools;
 use petgraph::Direction::Incoming;
 use util::SafeAccess;
-
-pub mod cfg;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Definition {
@@ -38,27 +34,25 @@ impl DataFlowDisplay for ReachingDefs {
             blocks.sort();
         }
 
-        let mut sorted_vars = self
-            .iter()
+        let format_var = |var| {
+            format!(
+                "\"{}\" <- [{}]",
+                var,
+                var_map
+                    .get(&var)
+                    .unwrap()
+                    .iter()
+                    .flat_map(|block_index| cfg.blocks.get(*block_index))
+                    .map(|block| block.label.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+
+        self.iter()
             .map(|def| def.variable.clone())
-            .collect::<Vec<_>>();
-        sorted_vars.sort();
-        sorted_vars
-            .into_iter()
-            .map(|var| {
-                format!(
-                    "\"{}\" <- [{}]",
-                    var,
-                    var_map
-                        .get(&var)
-                        .unwrap()
-                        .iter()
-                        .flat_map(|block_index| cfg.blocks.get(*block_index))
-                        .map(|block| block.label.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            })
+            .sorted()
+            .map(format_var)
             .collect::<Vec<_>>()
             .join(", ")
     }

@@ -1,5 +1,5 @@
 [package]
-name = "df"
+name = "cfg"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,9 +7,7 @@ edition = "2021"
 
 [dependencies]
 bbb = { path = "../bbb" }
-cfg = { path = "../cfg" }
 petgraph = "0.6.4"
-itertools = "0.11.0"
 util = { path = "../util" }
 
 [dependencies.bril-rs]

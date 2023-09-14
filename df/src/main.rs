@@ -1,11 +1,8 @@
 use bril_rs::load_program_from_read;
-use df::{
-    cfg::{CFGNode, CFG},
-    reaching_defs, DataFlowDisplay, DataFlowResult,
-};
+use df::{reaching_defs, DataFlowDisplay, DataFlowResult};
 use std::io;
 
-use df::cfg::generate_cfg;
+use cfg::{generate_cfg, CFGNode, CFG};
 
 fn print_node<T: DataFlowDisplay>(node: CFGNode, res: &DataFlowResult<T>, cfg: &CFG) {
     let format = |f: Option<&T>| f.map_or("N/A".to_string(), |set| set.generate_string(&cfg));
