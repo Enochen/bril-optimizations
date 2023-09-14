@@ -10,35 +10,58 @@ use util::SafeAccess;
 
 pub mod cfg;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Definition {
-    pub block_index: usize,
     pub variable: String,
-}
-
-impl Display for Definition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Hi")?;
-        Ok(())
-    }
+    pub block_index: usize,
 }
 
 pub type ReachingDefs = HashSet<Definition>;
 
-pub fn format_defs(defs: &ReachingDefs, cfg: &CFG) -> String {
-    let mut sorted_defs = defs.iter().collect::<Vec<_>>();
-    sorted_defs.sort();
-    sorted_defs
-        .into_iter()
-        .map(|def| {
-            format!(
-                "\"{}\" from {}",
-                def.variable,
-                cfg.blocks.get(def.block_index).unwrap().label
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
+pub trait DataFlowDisplay {
+    fn generate_string(&self, cfg: &CFG) -> String;
+}
+
+impl DataFlowDisplay for ReachingDefs {
+    fn generate_string(&self, cfg: &CFG) -> String {
+        if self.is_empty() {
+            return "∅".to_string();
+        }
+        let mut var_map = HashMap::new();
+        for def in self {
+            var_map
+                .entry(def.variable.clone())
+                .or_insert_with(|| Vec::new())
+                .push(def.block_index);
+        }
+        for blocks in var_map.values_mut() {
+            blocks.sort();
+        }
+
+        let mut sorted_vars = self
+            .iter()
+            .map(|def| def.variable.clone())
+            .collect::<Vec<_>>();
+        sorted_vars.sort();
+        sorted_vars
+            .into_iter()
+            .map(|var| {
+                format!(
+                    "\"{}\" <- [{}]",
+                    var,
+                    var_map
+                        .get(&var)
+                        .unwrap()
+                        .iter()
+                        .flat_map(|block_index| cfg.blocks.get(*block_index))
+                        .map(|block| block.label.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 trait DataFlowHelpers {
@@ -89,7 +112,7 @@ pub fn reaching_defs(cfg: &CFG) -> DataFlowResult<ReachingDefs> {
                 .collect();
             let kill_set = in_set
                 .into_iter()
-                .filter(|def| new_defs.contains(&def.variable));
+                .filter(|def| !new_defs.contains(&def.variable));
             out_set.extend(kill_set);
             out_map.insert(node, out_set);
         }

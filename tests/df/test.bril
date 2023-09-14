@@ -4,9 +4,12 @@
   br cond .true_block .false_block;
 .true_block:
   a: int = const 10;
+  cond: bool = const true;
   jmp .exit;
 .false_block:
   a: int = const 0;
+  cond: bool = const false;
 .exit:
+  test: int = id input;
   print a;
 }
