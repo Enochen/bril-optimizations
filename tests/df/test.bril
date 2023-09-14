@@ -1,0 +1,12 @@
+@main(input: int) {
+  test: int = const 5;
+  cond: bool = ge input test;
+  br cond .true_block .false_block;
+.true_block:
+  a: int = const 10;
+  jmp .exit;
+.false_block:
+  a: int = const 0;
+.exit:
+  print a;
+}

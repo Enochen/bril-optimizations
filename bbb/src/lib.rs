@@ -1,8 +1,10 @@
+use std::collections::HashSet;
+
 use bril_rs::{Code, EffectOps, Function, Instruction};
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq)]
 pub struct Block {
-    pub label: Option<String>,
+    pub label: String,
     pub instrs: Vec<Instruction>,
 }
 
@@ -13,12 +15,10 @@ pub trait ToCode {
 impl ToCode for Block {
     fn to_code(&self) -> Vec<Code> {
         let mut result = Vec::new();
-        if let Some(label) = &self.label {
-            result.push(Code::Label {
-                label: label.clone(),
-                pos: None,
-            })
-        }
+        result.push(Code::Label {
+            label: self.label.clone(),
+            pos: None,
+        });
         for instr in &self.instrs {
             result.push(Code::Instruction(instr.clone()));
         }
@@ -42,28 +42,50 @@ fn is_terminator(instr: &Instruction) -> bool {
     )
 }
 
+fn create_unique_label(counter: &mut i32, used_labels: &HashSet<String>) -> String {
+    let create_label = |v| format!("anon_block_{}", v);
+    let mut label = create_label(*counter);
+    while used_labels.contains(&label) {
+        *counter += 1;
+        label = create_label(*counter);
+    }
+    label
+}
+
 pub fn form_blocks(func: &Function) -> Vec<Block> {
     let mut blocks = Vec::new();
     let mut current_block = Block::default();
+    let mut used_labels = HashSet::new();
     for code in &func.instrs {
         match code {
             Code::Label { label, .. } => {
-                blocks.push(current_block.clone());
-                current_block = Block::default();
-                current_block.label = Some(label.clone());
+                if current_block != Block::default() {
+                    blocks.push(current_block);
+                    current_block = Block::default();
+                }
+                current_block.label = label.clone();
+                used_labels.insert(label.clone());
             }
             Code::Instruction(instr) => {
                 current_block.instrs.push(instr.clone());
                 if is_terminator(instr) {
-                    blocks.push(current_block.clone());
+                    blocks.push(current_block);
                     current_block = Block::default();
                 }
             }
         }
     }
-    if current_block.label.is_some() || !current_block.instrs.is_empty() {
+    if current_block != Block::default() {
         blocks.push(current_block);
     }
+    let mut counter = 0;
+    blocks
+        .iter_mut()
+        .filter(|block| block.label.is_empty())
+        .for_each(|block| {
+            block.label = create_unique_label(&mut counter, &used_labels);
+            used_labels.insert(block.label.clone());
+        });
     return blocks;
 }
 

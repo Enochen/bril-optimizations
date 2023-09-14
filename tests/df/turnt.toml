@@ -1,0 +1,2 @@
+[envs.reaching-defs]
+command = "bril2json < {filename} | target/debug/df"

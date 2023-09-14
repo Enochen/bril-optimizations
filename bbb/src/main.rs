@@ -1,14 +1,11 @@
 use std::io;
 
-use bbb::{form_blocks, Block, instr_to_txt};
+use bbb::{form_blocks, instr_to_txt, Block};
 use bril_rs::load_program_from_read;
 
 pub fn print_blocks(blocks: Vec<Block>) {
     for block in &blocks {
-        match &block.label {
-            Some(label) => println!("[Block: {}]", label),
-            None => println!("[Anonymous Block]"),
-        }
+        println!("[Block: {}]", block.label);
         for instr in &block.instrs {
             println!("{}", instr_to_txt(instr));
         }
