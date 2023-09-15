@@ -10,7 +10,7 @@ fn print_node<T: DataFlowDisplay>(node: CFGNode, res: &DataFlowResult<T>, cfg: &
         CFGNode::Block(i) => &cfg.blocks.get(i).unwrap().label,
         CFGNode::Return => "return",
     };
-    println!("{}", label);
+    println!("[Block: {}]", label);
     println!("   in: {}", format(res.in_map.get(&node)));
     println!("   out: {}", format(res.out_map.get(&node)));
 }

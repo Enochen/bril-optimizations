@@ -53,8 +53,8 @@ impl DataFlowDisplay for ReachingDefs {
             .map(|def| def.variable.clone())
             .sorted()
             .map(format_var)
-            .collect::<Vec<_>>()
-            .join(", ")
+            .map(|str| "\n      ".to_string() + &str)
+            .collect()
     }
 }
 
