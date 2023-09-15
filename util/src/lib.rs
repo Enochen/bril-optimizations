@@ -25,7 +25,7 @@ impl CheckOp for Instruction {
 }
 
 pub trait SafeAccess {
-    fn get_args(&self) -> Option<&Vec<String>>;
+    fn get_args(&self) -> Option<Vec<String>>;
     fn set_args(&mut self, values: Vec<String>);
     fn get_dest(&self) -> Option<String>;
     fn set_dest(&mut self, value: String);
@@ -33,10 +33,10 @@ pub trait SafeAccess {
 }
 
 impl SafeAccess for Instruction {
-    fn get_args(&self) -> Option<&Vec<String>> {
+    fn get_args(&self) -> Option<Vec<String>> {
         match self {
-            Instruction::Value { args, .. } => Some(args),
-            Instruction::Effect { args, .. } => Some(args),
+            Instruction::Value { args, .. } => Some(args.clone()),
+            Instruction::Effect { args, .. } => Some(args.clone()),
             Instruction::Constant { .. } => None,
         }
     }

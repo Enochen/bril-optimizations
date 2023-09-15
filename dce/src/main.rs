@@ -8,7 +8,6 @@ fn find_used(blocks: &Vec<Block>) -> HashSet<String> {
         .iter()
         .flat_map(|block| block.instrs.iter().flat_map(|instr| instr.get_args()))
         .flatten()
-        .cloned()
         .collect()
 }
 
@@ -48,7 +47,7 @@ fn regular_dce_block(block: &mut Block) -> bool {
         }
         if let Some(args) = instr.get_args() {
             args.into_iter().for_each(|arg| {
-                dead_vars.remove(arg);
+                dead_vars.remove(&arg);
             });
         }
         new_instrs.push(instr.clone());

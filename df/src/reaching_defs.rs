@@ -42,8 +42,8 @@ impl Analysis for ReachingDefs {
             .collect();
         let kill_set = self
             .iter()
-            .filter(|def| !new_defs.contains(&def.variable))
-            .cloned();
+            .cloned()
+            .filter(|def| !new_defs.contains(&def.variable));
         out_set.extend(kill_set);
         ReachingDefs(out_set)
     }

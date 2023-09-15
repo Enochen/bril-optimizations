@@ -27,7 +27,7 @@ fn get_outside_vars(block: &mut Block) -> Vec<String> {
     for instr in &block.instrs {
         if let Some(args) = instr.get_args() {
             for arg in args {
-                if !defined.contains(arg) {
+                if !defined.contains(&arg) {
                     result.insert(arg);
                 }
             }
@@ -36,7 +36,7 @@ fn get_outside_vars(block: &mut Block) -> Vec<String> {
             defined.insert(dest);
         }
     }
-    result.into_iter().cloned().collect()
+    result.into_iter().collect()
 }
 
 fn apply_lvn_block(block: &mut Block) {

@@ -1,10 +1,14 @@
 use bril_rs::load_program_from_read;
 use df::{run_worklist, DataFlowDisplay, DataFlowResult};
-use reaching_defs::ReachingDefs;
+use petgraph::Direction;
 use std::io;
 
 use cfg::{generate_cfg, CFGNode, CFG};
 
+use live_vars::LiveVars;
+use reaching_defs::ReachingDefs;
+
+mod live_vars;
 mod reaching_defs;
 
 fn print_node<T: DataFlowDisplay>(node: CFGNode, res: &DataFlowResult<T>, cfg: &CFG) {
@@ -13,7 +17,7 @@ fn print_node<T: DataFlowDisplay>(node: CFGNode, res: &DataFlowResult<T>, cfg: &
         CFGNode::Block(i) => &cfg.blocks.get(i).unwrap().label,
         CFGNode::Return => "return",
     };
-    println!("[Block: {}]", label);
+    println!("[{}]", label);
     println!("   in: {}", format(res.in_map.get(&node)));
     println!("   out: {}", format(res.out_map.get(&node)));
 }
@@ -22,7 +26,8 @@ fn main() -> io::Result<()> {
     let program = load_program_from_read(io::stdin());
     for function in program.functions {
         let cfg = generate_cfg(&function);
-        let df_res = run_worklist::<ReachingDefs>(&cfg);
+        // can swap analysis modes by changing type (it's like magic!)
+        let df_res = run_worklist::<ReachingDefs>(&cfg, Direction::Incoming);
         for i in 0..cfg.blocks.len() {
             print_node(CFGNode::Block(i), &df_res, &cfg);
         }
