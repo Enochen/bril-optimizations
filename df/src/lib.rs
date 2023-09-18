@@ -2,8 +2,16 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use bbb::Block;
 use cfg::{CFGNode, CFG};
-use petgraph::Direction::{self, Incoming, Outgoing};
+use petgraph::EdgeDirection::{self, Incoming, Outgoing};
 use util::SafeAccess;
+
+pub trait Analysis: Default + Clone + PartialEq + DataFlowDisplay {
+    fn direction() -> Direction;
+
+    fn meet(&self, other: &Self) -> Self;
+
+    fn transfer(&self, node: &CFGNode, cfg: &CFG) -> Self;
+}
 
 pub trait DataFlowDisplay {
     fn generate_string(&self, cfg: &CFG) -> String;
@@ -30,47 +38,53 @@ impl DataFlowHelpers for Block {
     }
 }
 
-pub trait Analysis: Default + Clone + PartialEq {
-    fn meet(&self, other: &Self) -> Self;
-
-    fn transfer(&self, block_index: usize, cfg: &CFG) -> Self;
+pub enum Direction {
+    Forward,
+    Backward,
 }
 
-pub struct DataFlowResult<T> {
+impl Into<EdgeDirection> for Direction {
+    fn into(self) -> EdgeDirection {
+        match self {
+            Direction::Forward => Incoming,
+            Direction::Backward => Outgoing,
+        }
+    }
+}
+
+pub struct DataFlowResult<T: DataFlowDisplay> {
     pub in_map: HashMap<CFGNode, T>,
     pub out_map: HashMap<CFGNode, T>,
 }
 
 /// Returns mapping from CFGNode to its reaching definitions
-pub fn run_worklist<T: Analysis>(cfg: &CFG, direction: Direction) -> DataFlowResult<T> {
+pub fn run_worklist<T: Analysis>(cfg: &CFG) -> DataFlowResult<T> {
     let mut in_map = HashMap::new();
-    let mut out_map: HashMap<CFGNode, T> = HashMap::new();
+    let mut out_map = HashMap::new();
 
     let mut worklist: VecDeque<_> = cfg.graph.nodes().collect();
+
+    let graph_direction = T::direction().into();
 
     while let Some(node) = worklist.pop_front() {
         let in_set = cfg
             .graph
-            .neighbors_directed(node, direction)
+            .neighbors_directed(node, graph_direction)
             .into_iter()
             .flat_map(|p| out_map.get(&p))
             .fold(T::default(), |acc, next| acc.meet(next));
         in_map.insert(node, in_set.clone());
-        if let CFGNode::Block(block_index) = node {
-            let out_set = in_set.transfer(block_index, &cfg);
-            let old_out = out_map.insert(node, out_set.clone());
-            if old_out != Some(out_set) {
-                cfg.graph
-                    .neighbors_directed(node, direction.opposite())
-                    .for_each(|s| worklist.push_back(s));
-            }
+        let out_set = in_set.transfer(&node, &cfg);
+        let old_out = out_map.insert(node, out_set.clone());
+        if old_out != Some(out_set) {
+            cfg.graph
+                .neighbors_directed(node, graph_direction.opposite())
+                .for_each(|s| worklist.push_back(s));
         }
     }
-    match direction {
-        Incoming => DataFlowResult { in_map, out_map },
-        Outgoing => DataFlowResult {
-            in_map: out_map,
-            out_map: in_map,
-        },
+    // Swap in and out when going backwards
+    if graph_direction == Outgoing {
+        (out_map, in_map) = (in_map, out_map)
     }
+    DataFlowResult { in_map, out_map }
 }

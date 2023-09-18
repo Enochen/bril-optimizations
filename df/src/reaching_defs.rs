@@ -3,8 +3,8 @@ use std::{
     ops::Deref,
 };
 
-use cfg::CFG;
-use df::{Analysis, DataFlowDisplay, DataFlowHelpers};
+use cfg::{CFG, CFGNode};
+use df::{Analysis, DataFlowDisplay, DataFlowHelpers, Direction};
 use itertools::Itertools;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -25,27 +25,34 @@ impl Deref for ReachingDefs {
 }
 
 impl Analysis for ReachingDefs {
+    fn direction() -> Direction {
+        Direction::Forward
+    }
+
     fn meet(&self, other: &Self) -> Self {
         ReachingDefs(self.union(&other).cloned().collect())
     }
 
-    fn transfer(&self, block_index: usize, cfg: &CFG) -> Self {
-        let block = cfg.blocks.get(block_index).unwrap();
-        let new_defs = block.get_defs();
-        let mut out_set: HashSet<_> = new_defs
-            .iter()
-            .cloned()
-            .map(|variable| Definition {
-                block_index,
-                variable,
-            })
-            .collect();
-        let kill_set = self
-            .iter()
-            .cloned()
-            .filter(|def| !new_defs.contains(&def.variable));
-        out_set.extend(kill_set);
-        ReachingDefs(out_set)
+    fn transfer(&self, node: &CFGNode, cfg: &CFG) -> Self {
+        if let CFGNode::Block(block_index) = node {
+            let block = cfg.blocks.get(*block_index).unwrap();
+            let new_defs = block.get_defs();
+            let mut out_set: HashSet<_> = new_defs
+                .iter()
+                .cloned()
+                .map(|variable| Definition {
+                    block_index: *block_index,
+                    variable,
+                })
+                .collect();
+            let kill_set = self
+                .iter()
+                .cloned()
+                .filter(|def| !new_defs.contains(&def.variable));
+            out_set.extend(kill_set);
+            return ReachingDefs(out_set)
+        }
+        self.clone()
     }
 }
 
@@ -62,8 +69,10 @@ impl DataFlowDisplay for ReachingDefs {
         });
         var_map.values_mut().for_each(|b| b.sort());
 
-        let format_var = |var| {
-            var_map.get(&var).map(|blocks| {
+        var_map
+            .iter()
+            .sorted()
+            .map(|(var, blocks)| {
                 format!(
                     "\"{}\" <- [{}]",
                     var,
@@ -75,12 +84,6 @@ impl DataFlowDisplay for ReachingDefs {
                         .join(", ")
                 )
             })
-        };
-
-        self.iter()
-            .map(|def| def.variable.clone())
-            .sorted()
-            .flat_map(format_var)
             .map(|str| "\n      ".to_string() + &str)
             .collect()
     }
