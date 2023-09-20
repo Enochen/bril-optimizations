@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 bbb = { path = "../bbb" }
 cfg = { path = "../cfg" }
+itertools = "0.11.0"
 petgraph = "0.6.4"
 util = { path = "../util" }
 
