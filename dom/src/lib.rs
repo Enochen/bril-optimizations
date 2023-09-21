@@ -2,6 +2,7 @@ use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use cfg::{CFGNode, CFG};
 use petgraph::{
+    algo::all_simple_paths,
     prelude::DiGraphMap,
     visit::{DfsPostOrder, IntoNeighbors, Visitable},
     Direction::{Incoming, Outgoing},
@@ -137,12 +138,29 @@ impl DominatorUtil for CFG {
             dominator_tree.add_edge(imm_dom, node, ());
         }
 
+        for node in all_nodes {
+            verify_dominators(&node, dominators.get(&node).unwrap(), &self);
+        }
+
         DomResult {
             dominators,
             dominated_by,
             dominance_frontier,
             immediate_dominator,
             dominator_tree,
+        }
+    }
+}
+
+/// Panics if input dominators does not match actual dominators of input node
+fn verify_dominators(node: &CFGNode, dominators: &HashSet<CFGNode>, cfg: &CFG) {
+    let naive_doms_opt =
+        all_simple_paths::<HashSet<_>, _>(&cfg.graph, CFGNode::Block(0), *node, 0, None)
+            .reduce(|a, b| a.intersection(&b).copied().collect());
+    // None means node is unreachable from entry
+    if let Some(naive_doms) = naive_doms_opt {
+        if naive_doms != *dominators {
+            panic!("Efficient algorithm calculates {:?}'s dominators is {:?}, but naive algorithm thinks dominators is {:?}", node, dominators, naive_doms)
         }
     }
 }

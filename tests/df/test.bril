@@ -14,6 +14,13 @@
   cond: bool = lt i mid;
   br cond .then .endif;
 
+.unreachable:
+  midf: int = const 5;
+
+.unreach2:
+  test: int = const 5;
+  jmp .unreachable;
+
 .then:
   x: int = add x one;
   jmp .endif;
@@ -27,4 +34,4 @@
 
 .exit:
   print x;
-} 
+}

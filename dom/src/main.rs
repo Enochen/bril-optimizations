@@ -1,8 +1,8 @@
-use bril_rs::load_program_from_read;
+use bril_rs::load_program;
 use cfg::{generate_cfg, CFGNode, CFG};
 use dom::{DomResult, DominatorUtil};
 use itertools::Itertools;
-use petgraph::{prelude::DiGraphMap, Direction::Outgoing};
+use petgraph::Direction::Outgoing;
 use std::{
     collections::{HashMap, HashSet},
     io,
@@ -34,7 +34,7 @@ impl PrettyPrint for HashSet<CFGNode> {
     }
 }
 
-fn print_results(node: CFGNode, cfg: &CFG, results: &HashMap<CFGNode, impl PrettyPrint>) {
+fn print_node(node: CFGNode, cfg: &CFG, result: Option<&impl PrettyPrint>) {
     let label = match node {
         CFGNode::Block(i) => &cfg.blocks.get(i).unwrap().label,
         CFGNode::Return => "return",
@@ -42,50 +42,48 @@ fn print_results(node: CFGNode, cfg: &CFG, results: &HashMap<CFGNode, impl Prett
     println!(
         "[{}]: {}",
         label,
-        results
-            .get(&node)
-            .map_or("N/A".to_string(), |f| f.pretty_print(cfg))
+        result.map_or("N/A".to_string(), |f| f.pretty_print(cfg))
     );
 }
 
+fn print_cfg(cfg: &CFG, results: &HashMap<CFGNode, impl PrettyPrint>) {
+    for i in 0..cfg.blocks.len() {
+        let node = CFGNode::Block(i);
+        print_node(node, &cfg, results.get(&node));
+    }
+}
+
 fn main() -> io::Result<()> {
-    let program = load_program_from_read(io::stdin());
+    let program = load_program();
     for function in program.functions {
         let cfg = generate_cfg(&function);
 
         let DomResult {
-            dominators: dominated_by,
+            dominators,
             dominated_by: _,
             dominance_frontier,
             immediate_dominator,
             dominator_tree,
         } = cfg.find_dominators();
+
         println!("Dominators");
-        for i in 0..cfg.blocks.len() {
-            print_results(CFGNode::Block(i), &cfg, &dominated_by);
-        }
+        print_cfg(&cfg, &dominators);
         println!("");
 
         println!("Domination Frontier");
-        for i in 0..cfg.blocks.len() {
-            print_results(CFGNode::Block(i), &cfg, &dominance_frontier);
-        }
+        print_cfg(&cfg, &dominance_frontier);
         println!("");
 
         println!("Immediate Dominator");
-        for i in 0..cfg.blocks.len() {
-            print_results(CFGNode::Block(i), &cfg, &immediate_dominator);
-        }
+        print_cfg(&cfg, &immediate_dominator);
         println!("");
 
-        println!("dominator_tree");
+        println!("Dominator Tree");
         let adj_list: HashMap<_, HashSet<_>> = dominator_tree
             .nodes()
-            .map(|n| (n, dominator_tree.neighbors_directed(n, Outgoing).collect()))
+            .map(|n| (n, dominator_tree.neighbors(n).collect()))
             .collect();
-        for i in 0..cfg.blocks.len() {
-            print_results(CFGNode::Block(i), &cfg, &adj_list);
-        }
+        print_cfg(&cfg, &adj_list);
     }
     Ok(())
 }
