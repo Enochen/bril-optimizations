@@ -7,11 +7,14 @@ use petgraph::{
 };
 
 pub struct DomResult<T> {
-    /// For a node, gives set of nodes that it is dominated by (its dominators)
+    /// dominators[x] is set of nodes that are dominators of x
+    pub dominators: HashMap<T, HashSet<T>>,
+    /// dominated_by[x] is set of nodes that are dominated by x
     pub dominated_by: HashMap<T, HashSet<T>>,
-    /// For a node, gives set of nodes that it is the dominator of
-    pub dominator_of: HashMap<T, HashSet<T>>,
+    /// dominated_by[x] is set of nodes that are on the dominance frontier of x
     pub dominance_frontier: HashMap<T, HashSet<T>>,
+    /// immediate_dominator[x] is the immediate dominator of x
+    pub immediate_dominator: HashMap<T, T>,
 }
 
 fn reverse_postorder<G, T>(graph: G, start: T) -> Vec<T>
@@ -28,74 +31,107 @@ where
     result
 }
 
-pub fn find_dominators(cfg: &CFG) -> DomResult<CFGNode> {
-    let all_nodes: HashSet<_> = cfg.graph.nodes().into_iter().collect();
+pub trait DominatorUtil {
+    fn find_dominators(&self) -> DomResult<CFGNode>;
+}
 
-    let mut dominated_by: HashMap<_, _> = all_nodes
-        .iter()
-        .map(|node| (*node, all_nodes.clone()))
-        .collect();
+impl DominatorUtil for CFG {
+    fn find_dominators(&self) -> DomResult<CFGNode> {
+        let all_nodes: HashSet<_> = self.graph.nodes().into_iter().collect();
 
-    dominated_by.insert(
-        CFGNode::Block(0),
-        vec![CFGNode::Block(0)].into_iter().collect(),
-    );
+        let mut dominators: HashMap<_, _> = all_nodes
+            .iter()
+            .map(|node| (*node, all_nodes.clone()))
+            .collect();
 
-    // Navigate in reverse postorder to terminate faster
-    let nodes = reverse_postorder(&cfg.graph, CFGNode::Block(0));
+        dominators.insert(
+            CFGNode::Block(0),
+            vec![CFGNode::Block(0)].into_iter().collect(),
+        );
 
-    loop {
-        let mut changed = false;
-        for &node in nodes.iter().skip(1) {
-            let prev_doms = dominated_by.get(&node).cloned();
-            let mut new_doms = cfg
-                .graph
-                .neighbors_directed(node, Incoming)
-                .map(|n| dominated_by.get(&n).unwrap())
-                .cloned()
-                .reduce(|a, b| a.intersection(&b).copied().collect::<HashSet<_>>())
-                .unwrap();
-            new_doms.insert(node);
-            let insert_res = dominated_by.insert(node, new_doms);
-            if insert_res != prev_doms {
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
+        // Navigate in reverse postorder to terminate faster
+        let reverse_postorder_nodes = reverse_postorder(&self.graph, CFGNode::Block(0));
 
-    let mut dominator_of: HashMap<_, HashSet<_>> = HashMap::new();
-    for (&node, doms) in &dominated_by {
-        for &dom in doms {
-            match dominator_of.entry(dom) {
-                Entry::Occupied(mut e) => {
-                    e.get_mut().insert(node);
-                }
-                Entry::Vacant(e) => {
-                    e.insert(HashSet::new()).insert(node);
+        loop {
+            let mut changed = false;
+            for &node in reverse_postorder_nodes.iter().skip(1) {
+                let prev_doms = dominators.get(&node).cloned();
+                let mut new_doms = self
+                    .graph
+                    .neighbors_directed(node, Incoming)
+                    .map(|n| dominators.get(&n).unwrap())
+                    .cloned()
+                    .reduce(|a, b| a.intersection(&b).copied().collect::<HashSet<_>>())
+                    .unwrap();
+                new_doms.insert(node);
+                let insert_res = dominators.insert(node, new_doms);
+                if insert_res != prev_doms {
+                    changed = true;
                 }
             }
+            if !changed {
+                break;
+            }
         }
-    }
 
-    let find_frontier = |doms: &HashSet<_>| {
-        doms.iter()
-            .flat_map(|dom| cfg.graph.neighbors_directed(*dom, Outgoing))
-            .collect::<HashSet<_>>()
-            .difference(doms)
+        let mut dominated_by: HashMap<_, HashSet<_>> = HashMap::new();
+        for (&node, doms) in &dominators {
+            for &dom in doms {
+                match dominated_by.entry(dom) {
+                    Entry::Occupied(mut e) => {
+                        e.get_mut().insert(node);
+                    }
+                    Entry::Vacant(e) => {
+                        e.insert(HashSet::new()).insert(node);
+                    }
+                }
+            }
+        }
+
+        let find_frontier = |node: &CFGNode| {
+            let subs = dominated_by
+                .get(node)
+                .expect("all nodes should exist as keys in dominated_by");
+            subs.iter()
+                .flat_map(|dom| self.graph.neighbors_directed(*dom, Outgoing))
+                .collect::<HashSet<_>>()
+                .difference(subs)
+                .copied()
+                .collect()
+        };
+
+        let dominance_frontier = all_nodes
+            .iter()
             .copied()
-            .collect()
-    };
-    let dominance_frontier = dominator_of
-        .iter()
-        .map(|(node, doms)| (node.clone(), find_frontier(&doms)))
-        .collect();
+            .map(|node| (node, find_frontier(&node)))
+            .collect();
 
-    DomResult {
-        dominated_by,
-        dominator_of,
-        dominance_frontier,
+        let find_immediate_dom = |node: &CFGNode| {
+            let doms = dominators
+                .get(node)
+                .expect("all nodes should exist as keys in dominators");
+            doms.iter().filter(|&d| d != node).find(|&d| {
+                let candidate_doms = dominated_by
+                    .get(d)
+                    .expect("all nodes should exist as keys in dominators");
+                let intersection: HashSet<_> = candidate_doms.intersection(doms).collect();
+                // The immediate dominator will only have two things in this intersection: the dominator and the dominated node
+                intersection.len() == 2
+            })
+        };
+
+        let mut immediate_dominator = HashMap::new();
+        for &node in &all_nodes {
+            if let Some(&dom) = find_immediate_dom(&node) {
+                immediate_dominator.insert(node, dom);
+            }
+        }
+
+        DomResult {
+            dominators,
+            dominated_by,
+            dominance_frontier,
+            immediate_dominator,
+        }
     }
 }
