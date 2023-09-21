@@ -2,6 +2,7 @@ use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use cfg::{CFGNode, CFG};
 use petgraph::{
+    prelude::DiGraphMap,
     visit::{DfsPostOrder, IntoNeighbors, Visitable},
     Direction::{Incoming, Outgoing},
 };
@@ -15,6 +16,8 @@ pub struct DomResult<T> {
     pub dominance_frontier: HashMap<T, HashSet<T>>,
     /// immediate_dominator[x] is the immediate dominator of x
     pub immediate_dominator: HashMap<T, T>,
+    /// dominator_tree contain nodes whose parent-child relationship is immediate dominance
+    pub dominator_tree: DiGraphMap<T, ()>,
 }
 
 fn reverse_postorder<G, T>(graph: G, start: T) -> Vec<T>
@@ -92,10 +95,11 @@ impl DominatorUtil for CFG {
             let subs = dominated_by
                 .get(node)
                 .expect("all nodes should exist as keys in dominated_by");
+            let strict_subs = subs.difference(&HashSet::from([*node])).copied().collect();
             subs.iter()
                 .flat_map(|dom| self.graph.neighbors_directed(*dom, Outgoing))
                 .collect::<HashSet<_>>()
-                .difference(subs)
+                .difference(&strict_subs)
                 .copied()
                 .collect()
         };
@@ -127,11 +131,18 @@ impl DominatorUtil for CFG {
             }
         }
 
+        let mut dominator_tree = DiGraphMap::new();
+        dominator_tree.add_node(CFGNode::Block(0));
+        for (&node, &imm_dom) in &immediate_dominator {
+            dominator_tree.add_edge(imm_dom, node, ());
+        }
+
         DomResult {
             dominators,
             dominated_by,
             dominance_frontier,
             immediate_dominator,
+            dominator_tree,
         }
     }
 }
