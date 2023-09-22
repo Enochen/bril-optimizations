@@ -81,14 +81,10 @@ impl DominatorUtil for CFG {
         let mut dominated_by: HashMap<_, HashSet<_>> = HashMap::new();
         for (&node, doms) in &dominators {
             for &dom in doms {
-                match dominated_by.entry(dom) {
-                    Entry::Occupied(mut e) => {
-                        e.get_mut().insert(node);
-                    }
-                    Entry::Vacant(e) => {
-                        e.insert(HashSet::new()).insert(node);
-                    }
-                }
+                dominated_by
+                    .entry(dom)
+                    .or_insert_with(HashSet::new)
+                    .insert(node);
             }
         }
 
