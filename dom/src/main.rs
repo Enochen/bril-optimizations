@@ -2,7 +2,6 @@ use bril_rs::load_program;
 use cfg::{generate_cfg, CFGNode, CFG};
 use dom::{DomResult, DominatorUtil};
 use itertools::Itertools;
-use petgraph::Direction::Outgoing;
 use std::{
     collections::{HashMap, HashSet},
     io,

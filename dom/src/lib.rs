@@ -1,11 +1,11 @@
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use cfg::{CFGNode, CFG};
 use petgraph::{
     algo::all_simple_paths,
     prelude::DiGraphMap,
     visit::{DfsPostOrder, IntoNeighbors, Visitable},
-    Direction::{Incoming, Outgoing},
+    Direction::Incoming,
 };
 
 pub struct DomResult<T> {
@@ -94,7 +94,7 @@ impl DominatorUtil for CFG {
                 .expect("all nodes should exist as keys in dominated_by");
             let strict_subs = subs.difference(&HashSet::from([*node])).copied().collect();
             subs.iter()
-                .flat_map(|dom| self.graph.neighbors_directed(*dom, Outgoing))
+                .flat_map(|dom| self.graph.neighbors(*dom))
                 .collect::<HashSet<_>>()
                 .difference(&strict_subs)
                 .copied()
@@ -117,7 +117,7 @@ impl DominatorUtil for CFG {
                     .expect("all nodes should exist as keys in dominators");
                 let intersection: HashSet<_> = candidate_doms.intersection(doms).collect();
                 // The immediate dominator will only have two things in this intersection: the dominator and the dominated node
-                intersection.len() == 2
+                intersection == HashSet::from([node, d])
             })
         };
 
