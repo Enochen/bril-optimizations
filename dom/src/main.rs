@@ -34,7 +34,7 @@ impl PrettyPrint for HashSet<CFGNode> {
     }
 }
 
-fn print_node(node: CFGNode, cfg: &CFG, result: Option<&impl PrettyPrint>) {
+fn print_node(node: CFGNode, result: Option<&impl PrettyPrint>, cfg: &CFG) {
     let label = match node {
         CFGNode::Block(i) => &cfg.blocks.get(i).unwrap().label,
         CFGNode::Return => "return",
@@ -46,44 +46,47 @@ fn print_node(node: CFGNode, cfg: &CFG, result: Option<&impl PrettyPrint>) {
     );
 }
 
-fn print_cfg(cfg: &CFG, results: &HashMap<CFGNode, impl PrettyPrint>) {
+fn print_results(results: &HashMap<CFGNode, impl PrettyPrint>, cfg: &CFG) {
     for i in 0..cfg.blocks.len() {
         let node = CFGNode::Block(i);
-        print_node(node, &cfg, results.get(&node));
+        print_node(node, results.get(&node), &cfg);
     }
+}
+
+fn print_dominators(cfg: &CFG) {
+    let DomResult {
+        dominators,
+        dominated_by: _,
+        dominance_frontier,
+        immediate_dominator,
+        dominator_tree,
+    } = cfg.find_dominators();
+
+    println!("Dominators");
+    print_results(&dominators, &cfg);
+    println!("");
+
+    println!("Domination Frontier");
+    print_results(&dominance_frontier, &cfg);
+    println!("");
+
+    println!("Immediate Dominator");
+    print_results(&immediate_dominator, &cfg);
+    println!("");
+
+    println!("Dominator Tree");
+    let adj_list: HashMap<_, HashSet<_>> = dominator_tree
+        .nodes()
+        .map(|n| (n, dominator_tree.neighbors(n).collect()))
+        .collect();
+    print_results(&adj_list, &cfg);
 }
 
 fn main() -> io::Result<()> {
     let program = load_program();
     for function in program.functions {
         let cfg = generate_cfg(&function);
-
-        let DomResult {
-            dominators,
-            dominated_by: _,
-            dominance_frontier,
-            immediate_dominator,
-            dominator_tree,
-        } = cfg.find_dominators();
-
-        println!("Dominators");
-        print_cfg(&cfg, &dominators);
-        println!("");
-
-        println!("Domination Frontier");
-        print_cfg(&cfg, &dominance_frontier);
-        println!("");
-
-        println!("Immediate Dominator");
-        print_cfg(&cfg, &immediate_dominator);
-        println!("");
-
-        println!("Dominator Tree");
-        let adj_list: HashMap<_, HashSet<_>> = dominator_tree
-            .nodes()
-            .map(|n| (n, dominator_tree.neighbors(n).collect()))
-            .collect();
-        print_cfg(&cfg, &adj_list);
+        print_dominators(&cfg);
     }
     Ok(())
 }

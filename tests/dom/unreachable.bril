@@ -1,0 +1,14 @@
+@main {
+  x: int = const 0;
+  jmp .exit;
+
+.unreachable:
+  test: int = const 1;
+
+.unreachable2:
+  test: int = const 2;
+  jmp .unreachable;
+
+.exit:
+  print x;
+}
