@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use bril_rs::{Code, EffectOps, Function, Instruction};
 use util::SafeAccess;
@@ -51,39 +51,6 @@ impl BlockHelpers for Block {
             .flat_map(|instr| instr.get_args())
             .flatten()
             .collect()
-    }
-}
-
-pub trait FunctionHelpers {
-    fn get_defs(&self) -> HashMap<String, HashSet<usize>>;
-    fn get_uses(&self) -> HashMap<String, HashSet<usize>>;
-}
-
-impl FunctionHelpers for Vec<Block> {
-    fn get_defs(&self) -> HashMap<String, HashSet<usize>> {
-        let mut result = HashMap::new();
-        self.iter().enumerate().for_each(|(index, block)| {
-            block.get_defs().into_iter().for_each(|def| {
-                result
-                    .entry(def)
-                    .or_insert_with(|| HashSet::new())
-                    .insert(index);
-            })
-        });
-        result
-    }
-
-    fn get_uses(&self) -> HashMap<String, HashSet<usize>> {
-        let mut result = HashMap::new();
-        self.iter().enumerate().for_each(|(index, block)| {
-            block.get_uses().into_iter().for_each(|r#use| {
-                result
-                    .entry(r#use)
-                    .or_insert_with(|| HashSet::new())
-                    .insert(index);
-            })
-        });
-        result
     }
 }
 
@@ -142,56 +109,4 @@ pub fn form_blocks(func: &Function) -> Vec<Block> {
             used_labels.insert(block.label.clone());
         });
     return blocks;
-}
-
-fn fold_terms<F>(terms: &Vec<String>, transform: F) -> String
-where
-    F: Fn(&String) -> String,
-{
-    terms.iter().map(transform).collect::<Vec<_>>().join(" ")
-}
-
-fn format_rhs(op: String, funcs: &Vec<String>, args: &Vec<String>, labels: &Vec<String>) -> String {
-    vec![
-        op,
-        fold_terms(funcs, |s| format!("@{s}")),
-        fold_terms(args, |s| format!("{s}")),
-        fold_terms(labels, |s| format!(".{s}")),
-    ]
-    .into_iter()
-    .filter(|s| s.is_empty())
-    .collect::<Vec<_>>()
-    .join(" ")
-}
-
-pub fn instr_to_txt(instr: &Instruction) -> String {
-    match instr {
-        Instruction::Constant {
-            dest,
-            const_type,
-            value,
-            ..
-        } => format!("{}: {} = const {}", dest, const_type, value),
-        Instruction::Value {
-            dest,
-            op_type,
-            op,
-            funcs,
-            args,
-            labels,
-            ..
-        } => format!(
-            "{}: {} = {}",
-            dest,
-            op_type,
-            format_rhs(op.to_string(), funcs, args, labels)
-        ),
-        Instruction::Effect {
-            op,
-            funcs,
-            args,
-            labels,
-            ..
-        } => format!("{}", format_rhs(op.to_string(), funcs, args, labels)),
-    }
 }

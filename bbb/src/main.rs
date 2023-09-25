@@ -1,13 +1,13 @@
 use std::io;
 
-use bbb::{form_blocks, instr_to_txt, Block};
+use bbb::{form_blocks, Block};
 use bril_rs::load_program_from_read;
 
 pub fn print_blocks(blocks: Vec<Block>) {
     for block in &blocks {
         println!("[Block: {}]", block.label);
         for instr in &block.instrs {
-            println!("{}", instr_to_txt(instr));
+            println!("{}", instr);
         }
         println!("");
     }
