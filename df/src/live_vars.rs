@@ -1,7 +1,8 @@
 use std::{collections::HashSet, ops::Deref};
 
+use bbb::BlockHelpers;
 use cfg::{CFGNode, CFG};
-use df::{Analysis, DataFlowDisplay, DataFlowHelpers, Direction};
+use df::{Analysis, DataFlowDisplay, Direction};
 use itertools::Itertools;
 
 #[derive(Clone, PartialEq, Eq, Debug, Default)]

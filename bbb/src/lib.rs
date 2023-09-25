@@ -1,6 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bril_rs::{Code, EffectOps, Function, Instruction};
+use util::SafeAccess;
 
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct Block {
@@ -29,6 +30,60 @@ impl ToCode for Block {
 impl ToCode for Vec<Block> {
     fn to_code(&self) -> Vec<Code> {
         self.iter().flat_map(|b| b.to_code()).collect()
+    }
+}
+
+pub trait BlockHelpers {
+    fn get_defs(&self) -> HashSet<String>;
+    fn get_uses(&self) -> HashSet<String>;
+}
+
+impl BlockHelpers for Block {
+    fn get_defs(&self) -> HashSet<String> {
+        self.instrs
+            .iter()
+            .flat_map(|instr| instr.get_dest())
+            .collect()
+    }
+    fn get_uses(&self) -> HashSet<String> {
+        self.instrs
+            .iter()
+            .flat_map(|instr| instr.get_args())
+            .flatten()
+            .collect()
+    }
+}
+
+pub trait FunctionHelpers {
+    fn get_defs(&self) -> HashMap<String, HashSet<usize>>;
+    fn get_uses(&self) -> HashMap<String, HashSet<usize>>;
+}
+
+impl FunctionHelpers for Vec<Block> {
+    fn get_defs(&self) -> HashMap<String, HashSet<usize>> {
+        let mut result = HashMap::new();
+        self.iter().enumerate().for_each(|(index, block)| {
+            block.get_defs().into_iter().for_each(|def| {
+                result
+                    .entry(def)
+                    .or_insert_with(|| HashSet::new())
+                    .insert(index);
+            })
+        });
+        result
+    }
+
+    fn get_uses(&self) -> HashMap<String, HashSet<usize>> {
+        let mut result = HashMap::new();
+        self.iter().enumerate().for_each(|(index, block)| {
+            block.get_uses().into_iter().for_each(|r#use| {
+                result
+                    .entry(r#use)
+                    .or_insert_with(|| HashSet::new())
+                    .insert(index);
+            })
+        });
+        result
     }
 }
 

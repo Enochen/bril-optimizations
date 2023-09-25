@@ -1,9 +1,7 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
-use bbb::Block;
 use cfg::{CFGNode, CFG};
 use petgraph::EdgeDirection::{self, Incoming, Outgoing};
-use util::SafeAccess;
 
 pub trait Analysis: Default + Clone + PartialEq + DataFlowDisplay {
     fn direction() -> Direction;
@@ -15,27 +13,6 @@ pub trait Analysis: Default + Clone + PartialEq + DataFlowDisplay {
 
 pub trait DataFlowDisplay {
     fn generate_string(&self, cfg: &CFG) -> String;
-}
-
-pub trait DataFlowHelpers {
-    fn get_defs(&self) -> HashSet<String>;
-    fn get_uses(&self) -> HashSet<String>;
-}
-
-impl DataFlowHelpers for Block {
-    fn get_defs(&self) -> HashSet<String> {
-        self.instrs
-            .iter()
-            .flat_map(|instr| instr.get_dest())
-            .collect()
-    }
-    fn get_uses(&self) -> HashSet<String> {
-        self.instrs
-            .iter()
-            .flat_map(|instr| instr.get_args())
-            .flatten()
-            .collect()
-    }
 }
 
 pub enum Direction {

@@ -1,3 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["bril-rs", "brilirs", "util", "bbb", "dce", "lvn", "df", "dom"]
+members = [
+  "bril-rs",
+  "brilirs",
+  "util",
+  "bbb",
+  "dce",
+  "lvn",
+  "df",
+  "dom",
+  "ssa",
+]

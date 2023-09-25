@@ -3,8 +3,9 @@ use std::{
     ops::Deref,
 };
 
-use cfg::{CFG, CFGNode};
-use df::{Analysis, DataFlowDisplay, DataFlowHelpers, Direction};
+use bbb::BlockHelpers;
+use cfg::{CFGNode, CFG};
+use df::{Analysis, DataFlowDisplay, Direction};
 use itertools::Itertools;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -50,7 +51,7 @@ impl Analysis for ReachingDefs {
                 .cloned()
                 .filter(|def| !new_defs.contains(&def.variable));
             out_set.extend(kill_set);
-            return ReachingDefs(out_set)
+            return ReachingDefs(out_set);
         }
         self.clone()
     }
