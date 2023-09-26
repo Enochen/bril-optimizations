@@ -59,18 +59,26 @@ impl DataFlowHelpers for CFG {
 }
 
 impl CFG {
-    pub fn get_block(&self, node: CFGNode) -> &Block {
+    pub fn get_block(&self, node: CFGNode) -> Option<&Block> {
         match node {
-            CFGNode::Block(i) => self.blocks.get(i).unwrap(),
-            CFGNode::Return => self.blocks.last().unwrap(),
+            CFGNode::Block(i) => self.blocks.get(i),
+            CFGNode::Return => None,
         }
     }
 
-    pub fn get_block_mut(&mut self, node: CFGNode) -> &mut Block {
+    pub fn get_block_mut(&mut self, node: CFGNode) -> Option<&mut Block> {
         match node {
-            CFGNode::Block(i) => self.blocks.get_mut(i).unwrap(),
-            CFGNode::Return => self.blocks.last_mut().unwrap(),
+            CFGNode::Block(i) => self.blocks.get_mut(i),
+            CFGNode::Return => None,
         }
+    }
+
+    pub fn split_blocks_mut(blocks: &mut Vec<Block>) -> HashMap<CFGNode, &mut Block> {
+        blocks
+            .iter_mut()
+            .enumerate()
+            .map(|(i, b)| (CFGNode::Block(i), b))
+            .collect()
     }
 }
 

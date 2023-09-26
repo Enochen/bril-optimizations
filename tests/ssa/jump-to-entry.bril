@@ -1,0 +1,11 @@
+@main {
+.entry:
+  x: int = const 0;
+
+.loop:
+  cond: bool = le x x;
+  br cond .entry .exit;
+
+.exit:
+  print x;
+}

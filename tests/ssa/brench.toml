@@ -1,0 +1,8 @@
+extract = '(\w+)'
+benchmarks = 'tests/dom/*.bril'
+
+[runs.ssa]
+pipeline = [
+  "bril2json",
+  "target/debug/ssa",
+]
