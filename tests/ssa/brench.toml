@@ -1,8 +1,8 @@
-extract = '(\w+)'
-benchmarks = 'tests/dom/*.bril'
+extract = 'total_dyn_inst: (\d+)'
+benchmarks = '**/*.bril'
 
-[runs.ssa]
-pipeline = [
-  "bril2json",
-  "target/debug/ssa",
-]
+[runs.baseline]
+pipeline = ["bril2json", "brili -p {args}"]
+
+[runs.ssa-into]
+pipeline = ["bril2json", "target/debug/ssa into", "brili -p {args}"]

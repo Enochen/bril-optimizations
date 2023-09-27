@@ -76,6 +76,14 @@ fn create_unique_label(counter: &mut i32, used_labels: &HashSet<String>) -> Stri
 
 pub fn form_blocks(func: &Function) -> Vec<Block> {
     let mut blocks = Vec::new();
+    // Add special entry block
+    blocks.insert(
+        0,
+        Block {
+            label: "".to_string(),
+            instrs: Vec::new(),
+        },
+    );
     let mut current_block = Block::default();
     let mut used_labels = HashSet::new();
     for code in &func.instrs {

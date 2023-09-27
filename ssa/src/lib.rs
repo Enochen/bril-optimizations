@@ -7,7 +7,30 @@ use bril_rs::{Instruction, ValueOps};
 use cfg::{CFGNode, DataFlowHelpers, CFG};
 use dom::{DomResult, DominatorUtil};
 use itertools::Itertools;
+use petgraph::Direction::Incoming;
 use util::SafeAccess;
+
+pub fn convert_to_ssa(source: &CFG) -> CFG {
+    let mut cfg = source.clone();
+    let dom_result = cfg.find_dominators();
+    insert_phi_nodes(&mut cfg, &dom_result);
+    let mut stack = VariableStack::new();
+    let mut variable_counter = HashMap::new();
+    rename(
+        CFGNode::Block(0),
+        &mut stack,
+        &mut cfg,
+        &dom_result,
+        &mut variable_counter,
+    );
+    cfg
+}
+
+pub fn convert_from_ssa(source: &CFG) -> CFG {
+    let mut cfg = source.clone();
+    remove_phi_nodes(&mut cfg);
+    cfg
+}
 
 fn insert_phi_nodes(cfg: &mut CFG, dom_result: &DomResult<CFGNode>) {
     let mut defs = cfg.get_defs();
@@ -100,10 +123,10 @@ fn rename(
         return;
     }
     let mut to_pop: HashMap<String, usize> = HashMap::new();
-    let mut blocks_mut = CFG::split_blocks_mut(&mut cfg.blocks);
-    let block = blocks_mut.get_mut(&node).unwrap();
-    let block_label = &block.label.clone();
-    for instr in &mut block.instrs {
+    let blocks_mut = CFG::split_blocks_mut(&mut cfg.blocks);
+    let block = blocks_mut.get(&node).unwrap();
+    let block_label = &block.borrow().label.clone();
+    for instr in &mut block.borrow_mut().instrs {
         if let Some(old_args) = instr.get_args() {
             let new_args = old_args
                 .iter()
@@ -120,13 +143,8 @@ fn rename(
             *to_pop.entry(old_dest).or_default() += 1;
         }
     }
-
-    for succ in cfg.graph.neighbors(node) {
-        for phi in blocks_mut
-            .get_mut(&succ)
-            .map(|b| &mut b.instrs)
-            .unwrap_or(&mut Vec::new())
-        {
+    for block_cell in cfg.graph.neighbors(node).flat_map(|s| blocks_mut.get(&s)) {
+        for phi in &mut block_cell.borrow_mut().instrs {
             match phi {
                 Instruction::Value {
                     op: ValueOps::Phi,
@@ -156,16 +174,45 @@ fn rename(
     }
 }
 
-pub fn convert_to_ssa(cfg: &mut CFG) {
-    let dom_result = cfg.find_dominators();
-    insert_phi_nodes(cfg, &dom_result);
-    let mut stack = VariableStack::new();
-    let mut variable_counter = HashMap::new();
-    rename(
-        CFGNode::Block(0),
-        &mut stack,
-        cfg,
-        &dom_result,
-        &mut variable_counter,
-    );
+fn remove_phi_nodes(cfg: &mut CFG) {
+    let n = cfg.blocks.len();
+    let blocks_mut = CFG::split_blocks_mut(&mut cfg.blocks);
+    for i in 1..n {
+        let node = CFGNode::Block(i);
+        let block = blocks_mut.get(&node).unwrap();
+        block.borrow_mut().instrs.retain(|instr| match instr {
+            Instruction::Value {
+                op: ValueOps::Phi,
+                args,
+                labels,
+                dest,
+                op_type,
+                ..
+            } => {
+                for pred in cfg.graph.neighbors_directed(node, Incoming) {
+                    let pred_block = blocks_mut.get(&pred).unwrap();
+                    let pred_label = pred_block.borrow().label.clone();
+                    let arg_index = labels
+                        .iter()
+                        .position(|label| label == &pred_label)
+                        .unwrap();
+                    let pred_instrs = &mut pred_block.borrow_mut().instrs;
+                    pred_instrs.insert(
+                        pred_instrs.len() - 1,
+                        Instruction::Value {
+                            dest: dest.to_string(),
+                            op_type: op_type.clone(),
+                            op: ValueOps::Id,
+                            args: vec![args[arg_index].clone()],
+                            funcs: Vec::new(),
+                            labels: Vec::new(),
+                            pos: None,
+                        },
+                    )
+                }
+                false
+            }
+            _ => true,
+        });
+    }
 }

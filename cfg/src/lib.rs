@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Display,
 };
@@ -7,7 +8,7 @@ use bbb::{form_blocks, Block, BlockHelpers};
 use bril_rs::{EffectOps, Function, Instruction};
 use petgraph::prelude::DiGraphMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CFG {
     pub blocks: Vec<Block>,
     pub graph: DiGraphMap<CFGNode, Edge>,
@@ -19,7 +20,7 @@ pub enum CFGNode {
     Return,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Edge {
     Always,
     Bool(bool),
@@ -73,11 +74,11 @@ impl CFG {
         }
     }
 
-    pub fn split_blocks_mut(blocks: &mut Vec<Block>) -> HashMap<CFGNode, &mut Block> {
+    pub fn split_blocks_mut(blocks: &mut Vec<Block>) -> HashMap<CFGNode, RefCell<&mut Block>> {
         blocks
             .iter_mut()
             .enumerate()
-            .map(|(i, b)| (CFGNode::Block(i), b))
+            .map(|(i, b)| (CFGNode::Block(i), RefCell::new(b)))
             .collect()
     }
 }
@@ -104,11 +105,14 @@ fn generate_label_index(blocks: &Vec<Block>) -> HashMap<String, usize> {
 }
 
 pub fn generate_cfg(function: &Function) -> CFG {
-    let blocks = form_blocks(function);
+    let mut blocks = form_blocks(function);
     let label_index = generate_label_index(&blocks);
     let mut graph = DiGraphMap::new();
 
-    for (i, block) in blocks.iter().enumerate() {
+    let n = blocks.len();
+    for i in 0..n {
+        let (left, right) = blocks.split_at_mut(i + 1);
+        let block = &mut left[i];
         let node = CFGNode::Block(i);
         graph.add_node(node);
         match block.instrs.last() {
@@ -146,10 +150,24 @@ pub fn generate_cfg(function: &Function) -> CFG {
                 );
             }
             _ => {
-                if let Some(_) = blocks.get(i + 1) {
+                if let Some(next) = right.get(0) {
                     graph.add_edge(node, CFGNode::Block(i + 1), Edge::Always);
+                    block.instrs.push(Instruction::Effect {
+                        op: EffectOps::Jump,
+                        labels: vec![next.label.to_owned()],
+                        args: Vec::new(),
+                        funcs: Vec::new(),
+                        pos: None,
+                    });
                 } else {
                     graph.add_edge(node, CFGNode::Return, Edge::Always);
+                    block.instrs.push(Instruction::Effect {
+                        op: EffectOps::Return,
+                        args: Vec::new(),
+                        funcs: Vec::new(),
+                        labels: Vec::new(),
+                        pos: None,
+                    });
                 }
             }
         };
