@@ -1,15 +1,29 @@
 use std::{
-    borrow::BorrowMut,
     cmp::Reverse,
     collections::{HashMap, HashSet},
 };
 
 use bril_rs::{Instruction, Type, ValueOps};
 use cfg::{CFGNode, DataFlowHelpers, CFG};
-use dom::{DomResult, DominatorUtil};
+use dom::DominatorUtil;
 use itertools::Itertools;
-use petgraph::Direction::Incoming;
+use petgraph::{prelude::DiGraphMap, Direction::Incoming};
 use util::SafeAccess;
+
+pub fn convert_to_ssa(source: &CFG) -> CFG {
+    let dom = source.find_dominators();
+    let mut converter = SSAConverter::new(source.clone());
+    let mut phi_nodes = converter.make_phi_nodes(&dom.dominance_frontier);
+    converter.rename(CFGNode::Block(0), &mut phi_nodes, &dom.dominator_tree);
+    converter.insert_phi_nodes(&phi_nodes);
+    converter.cfg
+}
+
+pub fn convert_from_ssa(source: &CFG) -> CFG {
+    let mut cfg = source.clone();
+    remove_phi_nodes(&mut cfg);
+    cfg
+}
 
 #[derive(Debug)]
 struct Phi {
@@ -46,90 +60,159 @@ impl Phi {
     }
 }
 
-pub fn convert_to_ssa(source: &CFG) -> CFG {
-    let mut cfg = source.clone();
-    let dom_result = cfg.find_dominators();
-    let mut phi_nodes = make_phi_nodes(&mut cfg, &dom_result);
-    let mut stack = VariableStack::new(cfg.args.iter().map(|arg| &arg.name).collect());
-    let mut variable_counter = HashMap::new();
-    rename(
-        CFGNode::Block(0),
-        &mut stack,
-        &mut cfg,
-        &dom_result,
-        &mut variable_counter,
-        &mut phi_nodes,
-    );
-    insert_phi_nodes(&mut cfg, &phi_nodes);
-    cfg
+type PhiResult = HashMap<CFGNode, Vec<Phi>>;
+
+struct SSAConverter {
+    cfg: CFG,
+    stack: VariableStack,
+    counter: VariableCounter,
 }
 
-pub fn convert_from_ssa(source: &CFG) -> CFG {
-    let mut cfg = source.clone();
-    remove_phi_nodes(&mut cfg);
-    cfg
-}
+impl SSAConverter {
+    fn new(cfg: CFG) -> Self {
+        let stack = VariableStack::new(cfg.args.iter().map(|arg| &arg.name).collect());
+        SSAConverter {
+            cfg,
+            stack,
+            counter: VariableCounter::new(),
+        }
+    }
 
-fn make_phi_nodes(cfg: &mut CFG, dom_result: &DomResult<CFGNode>) -> HashMap<CFGNode, Vec<Phi>> {
-    let mut result: HashMap<CFGNode, Vec<Phi>> = HashMap::new();
-    let mut seen: HashMap<&String, HashSet<cfg::CFGNode>> = HashMap::new();
-    for (variable, def_nodes) in cfg
-        .get_defs()
-        .clone()
-        .iter()
-        .sorted_by_key(|x| Reverse(x.0))
-    {
-        let mut def_stack = def_nodes.into_iter().collect_vec();
-        let mut def_type_opt = None;
-        let mut i = 0;
-        while let Some(def_node) = def_stack.get(i) {
-            i += 1;
-            let def_block = cfg.get_block(**def_node);
-            if def_block.is_none() {
-                continue;
-            }
-            let def_instrs = &def_block.unwrap().instrs;
-            let def_type = def_type_opt.get_or_insert_with(|| {
-                def_instrs
-                    .iter()
-                    .find(|instr| instr.get_dest().map_or(false, |d| &d == variable))
-                    .and_then(|instr| instr.get_type())
-                    .unwrap()
-                    .clone()
-            });
-            for node in dom_result
-                .dominance_frontier
-                .get(&def_node)
-                .expect("dominance frontier exists for all nodes")
-            {
-                // add phi node to block
-                if seen
-                    .get(variable)
-                    .map_or(true, |added| !added.contains(node))
-                {
-                    seen.entry(variable)
-                        .or_insert_with(|| HashSet::new())
-                        .insert(*node);
-                    let labels = cfg
-                        .graph
-                        .neighbors_directed(*node, petgraph::Direction::Incoming)
-                        .sorted()
-                        .map(|pred| cfg.get_block(pred).unwrap().label.to_string())
-                        .collect();
-                    // let args = vec!["undefined".to_string(); labels.len()];
-                    let phi = Phi::new(variable.to_owned(), def_type.clone(), labels);
-                    result.entry(*node).or_default().push(phi);
-                    // cfg.get_block_mut(*node).unwrap().instrs.insert(0, phi);
+    fn make_phi_nodes(
+        &mut self,
+        dominance_frontier: &HashMap<CFGNode, HashSet<CFGNode>>,
+    ) -> PhiResult {
+        let mut result: HashMap<CFGNode, Vec<Phi>> = HashMap::new();
+        let mut seen: HashMap<&String, HashSet<cfg::CFGNode>> = HashMap::new();
+        for (variable, def_nodes) in self
+            .cfg
+            .get_defs()
+            .clone()
+            .iter()
+            .sorted_by_key(|x| Reverse(x.0))
+        {
+            let mut def_stack = def_nodes.into_iter().collect_vec();
+            let mut def_type_opt = None;
+            let mut i = 0;
+            while let Some(def_node) = def_stack.get(i) {
+                i += 1;
+                let def_block = self.cfg.get_block(**def_node);
+                if def_block.is_none() {
+                    continue;
                 }
+                let def_instrs = &def_block.unwrap().instrs;
+                let def_type = def_type_opt.get_or_insert_with(|| {
+                    def_instrs
+                        .iter()
+                        .find(|instr| instr.get_dest().map_or(false, |d| &d == variable))
+                        .and_then(|instr| instr.get_type())
+                        .unwrap()
+                        .clone()
+                });
+                for node in dominance_frontier
+                    .get(&def_node)
+                    .expect("dominance frontier exists for all nodes")
+                {
+                    // add phi node to block
+                    if seen
+                        .get(variable)
+                        .map_or(true, |added| !added.contains(node))
+                    {
+                        seen.entry(variable)
+                            .or_insert_with(|| HashSet::new())
+                            .insert(*node);
+                        let labels = self
+                            .cfg
+                            .graph
+                            .neighbors_directed(*node, petgraph::Direction::Incoming)
+                            .sorted()
+                            .map(|pred| self.cfg.get_block(pred).unwrap().label.to_string())
+                            .collect();
+                        // let args = vec!["undefined".to_string(); labels.len()];
+                        let phi = Phi::new(variable.to_owned(), def_type.clone(), labels);
+                        result.entry(*node).or_default().push(phi);
+                        // cfg.get_block_mut(*node).unwrap().instrs.insert(0, phi);
+                    }
 
-                // add block to defs
-                if !def_stack.contains(&node) {
-                    def_stack.push(node);
+                    // add block to defs
+                    if !def_stack.contains(&node) {
+                        def_stack.push(node);
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    fn rename(
+        &mut self,
+        node: CFGNode,
+        phi_nodes: &mut PhiResult,
+        dominator_tree: &DiGraphMap<CFGNode, ()>,
+    ) {
+        if matches!(node, CFGNode::Return) {
+            return;
+        }
+        let mut to_pop: HashMap<String, usize> = HashMap::new();
+        let blocks_mut = CFG::split_blocks_mut(&mut self.cfg.blocks);
+        let block = blocks_mut.get(&node).unwrap();
+        let block_label = &block.borrow().label.clone();
+        let mut register_name = |old_name: String, stack: &mut VariableStack| {
+            let count = self.counter.inc(old_name.to_owned());
+            let new_name = format!("{}.{}", old_name, count);
+            stack.push(&old_name, new_name.to_string());
+            *to_pop.entry(old_name.to_string()).or_default() += 1;
+            new_name
+        };
+        if let Some(phis) = phi_nodes.get_mut(&node) {
+            for phi in phis {
+                let new_dest = register_name(phi.canonical.to_owned(), &mut self.stack);
+                phi.dest = Some(new_dest);
+            }
+        }
+        for instr in &mut block.borrow_mut().instrs {
+            if let Some(old_args) = instr.get_args() {
+                let new_args = old_args
+                    .iter()
+                    .map(|arg| self.stack.get_last(arg).unwrap_or(arg.to_string()))
+                    .collect();
+                instr.set_args(new_args);
+            }
+            if let Some(old_dest) = instr.get_dest() {
+                let new_dest = register_name(old_dest, &mut self.stack);
+                instr.set_dest(new_dest);
+            }
+        }
+        for succ in self.cfg.graph.neighbors(node) {
+            if let Some(phis) = phi_nodes.get_mut(&succ) {
+                for phi in phis {
+                    if let Some(name) = self.stack.get_last(&phi.canonical) {
+                        phi.label_args
+                            .entry(block_label.to_string())
+                            .and_modify(|arg| *arg = name);
+                    }
+                }
+            }
+        }
+
+        for next in dominator_tree.neighbors(node) {
+            self.rename(next, phi_nodes, &dominator_tree);
+        }
+
+        for (variable, n) in &to_pop {
+            self.stack.pop(variable, *n);
+        }
+    }
+
+    fn insert_phi_nodes(&mut self, phi_nodes: &HashMap<CFGNode, Vec<Phi>>) {
+        for (&node, phis) in phi_nodes {
+            if let Some(block) = self.cfg.get_block_mut(node) {
+                for phi in phis {
+                    block.instrs.insert(0, phi.to_instr());
                 }
             }
         }
     }
-    result
 }
 
 struct VariableStack {
@@ -137,7 +220,7 @@ struct VariableStack {
 }
 
 impl VariableStack {
-    pub fn new(init: Vec<&String>) -> Self {
+    fn new(init: Vec<&String>) -> Self {
         let stack = init
             .into_iter()
             .map(|var| (var.clone(), vec![var.clone()]))
@@ -145,95 +228,39 @@ impl VariableStack {
         VariableStack { stack }
     }
 
-    pub fn get_last(&self, variable: &String) -> Option<String> {
+    fn get_last(&self, variable: &String) -> Option<String> {
         self.stack.get(variable).and_then(|v| v.last()).cloned()
     }
 
-    pub fn push(&mut self, variable: &String, value: String) {
+    fn push(&mut self, variable: &String, value: String) {
         self.stack
             .entry(variable.to_owned())
             .or_default()
             .push(value);
     }
 
-    pub fn pop(&mut self, variable: &String, n: usize) {
+    fn pop(&mut self, variable: &String, n: usize) {
         if let Some(v) = self.stack.get_mut(variable) {
             v.truncate(v.len().saturating_sub(n));
         }
     }
 }
 
-fn rename(
-    node: CFGNode,
-    stack: &mut VariableStack,
-    cfg: &mut CFG,
-    dom_result: &DomResult<CFGNode>,
-    variable_counter: &mut HashMap<String, usize>,
-    phi_nodes: &mut HashMap<CFGNode, Vec<Phi>>,
-) {
-    if matches!(node, CFGNode::Return) {
-        return;
-    }
-    let mut to_pop: HashMap<String, usize> = HashMap::new();
-    let blocks_mut = CFG::split_blocks_mut(&mut cfg.blocks);
-    let block = blocks_mut.get(&node).unwrap();
-    let block_label = &block.borrow().label.clone();
-    if let Some(phis) = phi_nodes.get_mut(&node) {
-        for phi in phis {
-            let old_dest = phi.canonical.to_owned();
-            let count = variable_counter.entry(old_dest.to_owned()).or_default();
-            let new_dest = format!("{}.{}", old_dest, count);
-            *count += 1;
-            phi.dest = Some(new_dest.to_owned());
-            stack.push(&old_dest, new_dest);
-            *to_pop.entry(old_dest).or_default() += 1;
-        }
-    }
-    for instr in &mut block.borrow_mut().instrs {
-        if let Some(old_args) = instr.get_args() {
-            let new_args = old_args
-                .iter()
-                .map(|arg| stack.get_last(arg).unwrap_or(arg.to_string()))
-                .collect();
-            instr.set_args(new_args);
-        }
-        if let Some(old_dest) = instr.get_dest() {
-            let count = variable_counter.entry(old_dest.to_owned()).or_default();
-            let new_dest = format!("{}.{}", old_dest, count);
-            *count += 1;
-            instr.set_dest(new_dest.to_owned());
-            stack.push(&old_dest, new_dest);
-            *to_pop.entry(old_dest).or_default() += 1;
-        }
-    }
-    for succ in cfg.graph.neighbors(node) {
-        if let Some(phis) = phi_nodes.get_mut(&succ) {
-            for phi in phis {
-                if let Some(name) = stack.get_last(&phi.canonical) {
-                    phi.label_args
-                        .entry(block_label.to_string())
-                        .and_modify(|arg| *arg = name);
-                }
-            }
-        }
-    }
-
-    for next in dom_result.dominator_tree.neighbors(node) {
-        rename(next, stack, cfg, dom_result, variable_counter, phi_nodes)
-    }
-
-    for (variable, n) in &to_pop {
-        stack.pop(variable, *n);
-    }
+struct VariableCounter {
+    counter: HashMap<String, usize>,
 }
 
-fn insert_phi_nodes(cfg: &mut CFG, phi_nodes: &HashMap<CFGNode, Vec<Phi>>) {
-    for (&node, phis) in phi_nodes {
-        if let Some(block) = cfg.get_block_mut(node) {
-            for phi in phis {
-                block.instrs.insert(0, phi.to_instr());
-            }
+impl VariableCounter {
+    fn new() -> Self {
+        VariableCounter {
+            counter: HashMap::new(),
         }
+    }
+
+    fn inc(&mut self, variable: String) -> usize {
+        let count = self.counter.entry(variable).or_default();
+        *count += 1;
+        *count - 1
     }
 }
 
