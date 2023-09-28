@@ -3,7 +3,7 @@
   x: int = const 0;
 
 .loop:
-  cond: bool = le x x;
+  cond: bool = lt x x;
   br cond .entry .exit;
 
 .exit:

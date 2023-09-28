@@ -118,10 +118,6 @@ impl Table {
                     .map(|num| self.num_to_value(*num))
                     .map(|value| self.simplify(value))
                     .collect_vec();
-                if op == &ValueOps::PtrAdd {
-                    dbg!(&value);
-                    dbg!(&simplified_args);
-                }
                 match (op, &simplified_args[..]) {
                     // Ints
                     (ValueOps::Add, [Value::Constant(Int(a)), Value::Constant(Int(b))]) => {

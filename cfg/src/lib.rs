@@ -5,13 +5,14 @@ use std::{
 };
 
 use bbb::{form_blocks, Block, BlockHelpers};
-use bril_rs::{EffectOps, Function, Instruction};
+use bril_rs::{Argument, EffectOps, Function, Instruction};
 use petgraph::prelude::DiGraphMap;
 
 #[derive(Debug, Clone)]
 pub struct CFG {
     pub blocks: Vec<Block>,
     pub graph: DiGraphMap<CFGNode, Edge>,
+    pub args: Vec<Argument>,
 }
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -173,5 +174,9 @@ pub fn generate_cfg(function: &Function) -> CFG {
         };
     }
 
-    CFG { blocks, graph }
+    CFG {
+        blocks,
+        graph,
+        args: function.args.clone(),
+    }
 }

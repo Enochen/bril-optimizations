@@ -7,7 +7,7 @@ use ssa::{convert_from_ssa, convert_to_ssa};
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    // Valid values: ["into", "full"], defaults to "full"
+    // Valid values: ["into", "full"], defaults to "full" if empty
     let mode = args.get(1).map(|a| a.as_str()).unwrap_or("full");
 
     let mut program = load_program();
