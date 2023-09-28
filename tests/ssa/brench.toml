@@ -5,7 +5,13 @@ benchmarks = '**/*.bril'
 pipeline = ["bril2json", "brili -p {args}"]
 
 [runs.ssa-into]
-pipeline = ["bril2json", "target/debug/ssa into", "brili -p {args}"]
+pipeline = [
+  "bril2json",
+  "target/debug/ssa into",
+  "target/debug/lvn",
+  "target/debug/dce",
+  "brili -p {args}",
+]
 
 [runs.ssa-full-dce]
 pipeline = [
@@ -13,12 +19,5 @@ pipeline = [
   "target/debug/ssa full",
   "target/debug/lvn",
   "target/debug/dce",
-  "brili -p {args}",
-]
-
-[runs.ssa-into-example]
-pipeline = [
-  "bril2json",
-  "python ../old-bril/examples/to_ssa.py",
   "brili -p {args}",
 ]
