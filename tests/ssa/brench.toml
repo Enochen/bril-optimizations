@@ -8,8 +8,22 @@ pipeline = ["bril2json", "brili -p {args}"]
 pipeline = [
   "bril2json",
   "target/debug/ssa into",
+  "brili -p {args}",
+]
+
+[runs.ssa-into-dce]
+pipeline = [
+  "bril2json",
+  "target/debug/ssa into",
   "target/debug/lvn",
   "target/debug/dce",
+  "brili -p {args}",
+]
+
+[runs.ssa-full]
+pipeline = [
+  "bril2json",
+  "target/debug/ssa full",
   "brili -p {args}",
 ]
 
