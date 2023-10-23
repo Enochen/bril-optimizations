@@ -27,6 +27,7 @@ pub fn run_input<T: std::io::Write, U: std::io::Write>(
   input: impl std::io::Read,
   out: T,
   input_args: &[String],
+  garbage_collect: bool,
   profiling: bool,
   profiling_out: U,
   check: bool,
@@ -45,7 +46,7 @@ pub fn run_input<T: std::io::Write, U: std::io::Write>(
   check::type_check(&bbprog)?;
 
   if !check {
-    interp::execute_main(&bbprog, out, input_args, profiling, profiling_out)?;
+    interp::execute_main(&bbprog, out, input_args, garbage_collect, profiling, profiling_out)?;
   }
 
   Ok(())
