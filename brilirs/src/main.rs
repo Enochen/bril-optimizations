@@ -23,6 +23,7 @@ fn main() {
     input,
     std::io::BufWriter::new(std::io::stdout()),
     &args.args,
+    args.garbage_collect,
     args.profile,
     std::io::stderr(),
     args.check,

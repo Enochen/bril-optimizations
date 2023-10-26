@@ -4,6 +4,10 @@ use clap::Parser;
 #[command(about, version, author)] // keeps the cli synced with Cargo.toml
 #[command(allow_hyphen_values(true))]
 pub struct Cli {
+  /// Flag to enable garbage collection
+  #[arg(long = "gc", action)]
+  pub garbage_collect: bool,
+
   /// Flag to output the total number of dynamic instructions
   #[arg(short, long, action)]
   pub profile: bool,

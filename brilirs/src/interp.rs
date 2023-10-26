@@ -788,6 +788,7 @@ pub fn execute_main<T: std::io::Write, U: std::io::Write>(
   prog: &BBProgram,
   out: T,
   input_args: &[String],
+  garbage_collect: bool,
   profiling: bool,
   mut profiling_out: U,
 ) -> Result<(), PositionalInterpError> {

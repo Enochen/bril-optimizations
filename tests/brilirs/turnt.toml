@@ -1,0 +1,5 @@
+[envs.baseline]
+command = "bril2json < {filename} | brilirs -p {args}"
+
+[envs.gc]
+command = "bril2json < {filename} | brilirs --gc -p {args}"
